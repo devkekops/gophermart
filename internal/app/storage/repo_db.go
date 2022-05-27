@@ -64,12 +64,17 @@ func NewRepoDB(databaseURI string) (*RepoDB, error) {
 	return r, nil
 }
 
-func (r *RepoDB) CreateUser(login string, passwordHash string) error {
+func (r *RepoDB) CreateUser(login string, passwordHash string) (string, error) {
 	querySaveUser := `INSERT INTO users (login, password_hash) VALUES ($1, $2)`
-	if _, err := r.db.ExecContext(context.Background(), querySaveUser, login, passwordHash); err != nil {
-		return err
+	result, err := r.db.ExecContext(context.Background(), querySaveUser, login, passwordHash)
+	if err != nil {
+		return "", err
 	}
-	return nil
+	userID, err := result.LastInsertId()
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatInt(userID, 10), nil
 }
 
 func (r *RepoDB) AuthUser(login string, passwordHash string) (string, error) {

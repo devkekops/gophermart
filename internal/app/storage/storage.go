@@ -19,7 +19,7 @@ type Withdrawal struct {
 }
 
 type Repository interface {
-	CreateUser(login string, passwordHash string) error
+	CreateUser(login string, passwordHash string) (string, error)
 	AuthUser(login string, passwordHash string) (string, error)
 	LoadOrder(orderID string, userID string) error
 	GetOrders(userID string) ([]Order, error)

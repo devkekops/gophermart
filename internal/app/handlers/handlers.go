@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -31,17 +30,17 @@ func getPasswordHash(password string) string {
 
 func createSession(userID string, secretKey string) string {
 	userIDBytes := []byte(userID)
-	fmt.Println(hex.EncodeToString(userIDBytes))
+	//fmt.Println(hex.EncodeToString(userIDBytes))
 
 	key := sha256.Sum256([]byte(secretKey))
 	h := hmac.New(sha256.New, key[:])
 	h.Write(userIDBytes)
 	dst := h.Sum(nil)
-	fmt.Println(hex.EncodeToString(dst))
+	//fmt.Println(hex.EncodeToString(dst))
 
 	sessionBytes := append(userIDBytes[:], dst[:]...)
 	session := hex.EncodeToString(sessionBytes)
-	fmt.Println(session)
+	//fmt.Println(session)
 
 	return session
 }
@@ -58,7 +57,7 @@ func (bh *BaseHandler) register() http.HandlerFunc {
 		passwordHash := getPasswordHash(creds.Password)
 		//fmt.Println(passwordHash)
 
-		err := bh.repo.CreateUser(creds.Login, passwordHash)
+		userID, err := bh.repo.CreateUser(creds.Login, passwordHash)
 		if err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) {
@@ -72,8 +71,14 @@ func (bh *BaseHandler) register() http.HandlerFunc {
 				return
 			}
 		}
+		session := createSession(userID, bh.secretKey)
+		cookie := &http.Cookie{
+			Name:  cookieName,
+			Value: session,
+			Path:  cookiePath,
+		}
+		http.SetCookie(w, cookie)
 
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 	}
 }
@@ -137,7 +142,6 @@ func (bh *BaseHandler) withdrawals() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		userIDctx := req.Context().Value(userIDKey)
 		userID := userIDctx.(string)
-		fmt.Println(userID)
 
 		withdrawals, err := bh.repo.GetWithdrawals(userID)
 		if err != nil {
