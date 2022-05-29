@@ -39,6 +39,7 @@ func (w *Worker) loop() {
 	queryUpdateOrderStatusAccrual := `UPDATE orders SET status = ($1), accrual = ($2) WHERE order_id = ($3) `
 	for {
 		<-w.timer.C
+	ordersloop:
 		for {
 			currentOrder := <-w.repo.ordersCh
 			_, err := w.repo.db.ExecContext(ctx, queryUpdateOrderStatus, NEW, currentOrder)
@@ -71,7 +72,7 @@ func (w *Worker) loop() {
 				}
 			case 429:
 				w.timer.Reset(10 * time.Second)
-				break
+				break ordersloop
 			case 500:
 				w.repo.ordersCh <- currentOrder
 			}
