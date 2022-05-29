@@ -35,7 +35,9 @@ func NewBaseHandler(repo storage.Repository, secretKey string) *BaseHandler {
 			r.Use(authHandle(bh.secretKey))
 			r.Post("/orders", bh.loadOrder())
 			r.Get("/orders", bh.getOrders())
+
 			r.Route("/balance", func(r chi.Router) {
+				r.Get("/", bh.getBalance())
 				r.Post("/withdraw", bh.withdraw())
 				r.Get("/withdrawals", bh.withdrawals())
 			})

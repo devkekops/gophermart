@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -215,7 +214,6 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 		userID := userIDctx.(string)
 
 		orders, err := bh.repo.GetOrders(userID)
-		fmt.Println(orders)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			log.Println(err)
@@ -229,6 +227,27 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 
 		var buf bytes.Buffer
 		json.NewEncoder(&buf).Encode(orders)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(buf.Bytes())
+	}
+}
+
+func (bh *BaseHandler) getBalance() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		userIDctx := req.Context().Value(userIDKey)
+		userID := userIDctx.(string)
+
+		balance, err := bh.repo.GetBalance(userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
+
+		var buf bytes.Buffer
+		json.NewEncoder(&buf).Encode(balance)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

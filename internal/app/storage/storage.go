@@ -6,21 +6,21 @@ var ErrOrderExistsForCurrentUser = errors.New("order already been loaded by curr
 var ErrOrderExistsForOtherUser = errors.New("order already been loaded by other user")
 
 type Order struct {
-	OrderID    string  `json:"number"`
-	Status     string  `json:"status"`
-	Accrual    float64 `json:"accrual"`
-	UploadedAt string  `json:"uploaded_at"`
+	OrderID    string  `json:"number" db:"order_id"`
+	Status     string  `json:"status" db:"status"`
+	Accrual    float64 `json:"accrual" db:"accrual"`
+	UploadedAt string  `json:"uploaded_at" db:"uploaded_at"`
 }
 
 type Balance struct {
-	Current   float64 `json:"current"`
-	Withdrawn float64 `json:"withdrawn"`
+	Current   float64 `json:"current" db:"current"`
+	Withdrawn float64 `json:"withdrawn" db:"withdrawn"`
 }
 
 type Withdrawal struct {
-	OrderID     string  `json:"order"`
-	Sum         float64 `json:"sum"`
-	ProcessedAt string  `json:"processed_at"`
+	OrderID     string  `json:"order" db:"order_id"`
+	Sum         float64 `json:"sum" db:"sum"`
+	ProcessedAt string  `json:"processed_at" db:"processed_at"`
 }
 
 type Repository interface {

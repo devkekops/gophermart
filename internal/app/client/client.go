@@ -2,7 +2,6 @@ package client
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -44,7 +43,7 @@ func (c *Client) GetAccrualInfo(number string) (AccrualResponse, error) {
 	}
 	defer res.Body.Close()
 
-	fmt.Println(res.StatusCode)
+	//fmt.Println(res.StatusCode)
 	accrualResp.StatusCode = res.StatusCode
 	if res.StatusCode == http.StatusOK {
 		body, err := ioutil.ReadAll(res.Body)
