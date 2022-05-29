@@ -5,4 +5,5 @@ type Config struct {
 	DatabaseURI          string `env:"DATABASE_URI"`
 	AccrualSystemAddress string `env:"ACCRUAL_SYSTEM_ADDRESS"`
 	SecretKey            string
+	ClientTimeout        int
 }

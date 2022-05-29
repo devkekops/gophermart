@@ -3,16 +3,89 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+	"runtime"
 	"strconv"
+	"time"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
+
+	"github.com/devkekops/gophermart/internal/app/client"
 )
 
-type RepoDB struct {
-	db *sql.DB
+const (
+	NEW        = "NEW"
+	REGISTERED = "REGISTERED"
+	INVALID    = "INVALID"
+	PROCESSING = "PROCESSING"
+	PROCESSED  = "PROCESSED"
+)
+
+type Worker struct {
+	id    int
+	repo  *RepoDB
+	timer *time.Timer
 }
 
-func NewRepoDB(databaseURI string) (*RepoDB, error) {
+func (w *Worker) loop() {
+	// worker в цикле проходит по очереди на отправку и шлёт запросы в систему через инициализированный клиент:
+	// 		- при статус коде 200 - обновляет status, если status PROCESSED или INVALID - обновляем accrual для заказа, удаляем из очереди,
+	//			если REGISTERED - переместить в конец очереди, если PROCESSING - обновить статус и переместить в конец очереди
+	//		- при статус коде 429 - можешь прийти не раньше чем через 5(или какое-то другое число) секунд (сделать на channel-ах retry)
+	ctx := context.Background()
+	queryUpdateOrderStatus := `UPDATE orders SET status = ($1) WHERE order_id = ($2)`
+	queryUpdateOrderStatusAccrual := `UPDATE orders SET status = ($1), accrual = ($2) WHERE order_id = ($3) `
+	for {
+		<-w.timer.C
+		for {
+			currentOrder := <-w.repo.ordersCh
+			_, err := w.repo.db.ExecContext(ctx, queryUpdateOrderStatus, NEW, currentOrder)
+			if err != nil {
+				log.Printf("error: %v\n", err)
+			}
+
+			accrualResp, err := w.repo.client.GetAccrualInfo(currentOrder)
+			if err != nil {
+				log.Printf("error: %v\n", err)
+			}
+			//fmt.Printf("worker #%d processed order %s, accrualResp: %+v\n", w.id, currentOrder, accrualResp)
+
+			switch accrualResp.StatusCode {
+			case 200:
+				switch accrualResp.Status {
+				case REGISTERED:
+					w.repo.ordersCh <- currentOrder
+				case PROCESSING:
+					_, err := w.repo.db.ExecContext(ctx, queryUpdateOrderStatus, PROCESSING, currentOrder)
+					if err != nil {
+						log.Printf("error: %v\n", err)
+					}
+					w.repo.ordersCh <- currentOrder
+				case INVALID, PROCESSED:
+					_, err := w.repo.db.ExecContext(ctx, queryUpdateOrderStatusAccrual, accrualResp.Status, accrualResp.Accrual, currentOrder)
+					if err != nil {
+						log.Printf("error: %v\n", err)
+					}
+				}
+			case 429:
+				w.timer.Reset(10 * time.Second)
+				break
+			case 500:
+				w.repo.ordersCh <- currentOrder
+			}
+		}
+	}
+}
+
+type RepoDB struct {
+	db       *sql.DB
+	client   *client.Client
+	ordersCh chan string
+}
+
+func NewRepoDB(databaseURI string, client *client.Client) (*RepoDB, error) {
 	db, err := sql.Open("pgx", databaseURI)
 	if err != nil {
 		return nil, err
@@ -32,7 +105,7 @@ func NewRepoDB(databaseURI string) (*RepoDB, error) {
 		order_id		TEXT NOT NULL UNIQUE,
 		user_id			INTEGER NOT NULL,
 		status			VARCHAR(10) NOT NULL,
-		accrual			NUMERIC(15,2) NOT NULL DEFAULT 0.00,
+		accrual			NUMERIC(15,2),
 		uploaded_at		TIMESTAMP WITH TIME ZONE NOT NULL
 	);`
 
@@ -58,7 +131,18 @@ func NewRepoDB(databaseURI string) (*RepoDB, error) {
 	}
 
 	r := &RepoDB{
-		db: db,
+		db:       db,
+		client:   client,
+		ordersCh: make(chan string),
+	}
+
+	workers := make([]*Worker, 0, runtime.NumCPU())
+	for i := 0; i < runtime.NumCPU(); i++ {
+		workers = append(workers, &Worker{i, r, time.NewTimer(0)})
+	}
+
+	for _, w := range workers {
+		go w.loop()
 	}
 
 	return r, nil
@@ -78,21 +162,45 @@ func (r *RepoDB) CreateUser(login string, passwordHash string) (string, error) {
 }
 
 func (r *RepoDB) AuthUser(login string, passwordHash string) (string, error) {
-	queryAuthUser := `SELECT 1 FROM users WHERE login = ($1) AND password_hash = ($2)`
-	var userID uint64
+	var userID int64
+	queryAuthUser := `SELECT user_id FROM users WHERE login = ($1) AND password_hash = ($2)`
 	row := r.db.QueryRowContext(context.Background(), queryAuthUser, login, passwordHash)
 	if err := row.Scan(&userID); err != nil {
 		return "", err
 	}
-	return strconv.FormatUint(userID, 10), nil
+	return strconv.FormatInt(userID, 10), nil
 }
 
 func (r *RepoDB) LoadOrder(orderID string, userID string) error {
 	// 1. записывает в бд в таблицу order (order_id=orderID, user_id=userID, status=NEW, accrual=0, uploaded_at=time.Now())
 	// 2. добавляет orderID в очередь на отправку в систему рассчёта
-	// 3. workerpool в цикле проходит по очереди на отправку и шлёт запросы в систему через инициализированный в main.go клиент:
-	// 		- при статус коде 200 - обновляет status, если status processed - обновляем accrual для заказа, удаляем из очереди, если другой - переместить в конец очереди
-	//		- при статус коде 429 - переход к следующему элементу? можешь прийти не раньше чем через 5 секунд (сделать на channel-ах retry)
+
+	var userIDExisting int64
+	queryCheckIfOrderExists := `SELECT user_id FROM orders WHERE order_id = ($1)`
+	row := r.db.QueryRowContext(context.Background(), queryCheckIfOrderExists, orderID)
+	if err := row.Scan(&userIDExisting); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+	}
+
+	uid := strconv.FormatInt(userIDExisting, 10)
+	if uid == userID {
+		return fmt.Errorf("%w", ErrOrderExistsForCurrentUser)
+	} else if userIDExisting != 0 {
+		return fmt.Errorf("%w", ErrOrderExistsForOtherUser)
+	}
+
+	querySaveNewOrder := `INSERT INTO orders (order_id, user_id, status, uploaded_at) VALUES ($1, $2, $3, $4)`
+	_, err := r.db.ExecContext(context.Background(), querySaveNewOrder, orderID, userID, "NEW", time.Now())
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		r.ordersCh <- orderID
+	}()
+
 	return nil
 }
 

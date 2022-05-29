@@ -13,7 +13,7 @@ import (
 
 type key string
 
-var (
+const (
 	cookieName     = "session"
 	cookiePath     = "/"
 	userIDKey  key = "userID"

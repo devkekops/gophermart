@@ -1,5 +1,10 @@
 package storage
 
+import "errors"
+
+var ErrOrderExistsForCurrentUser = errors.New("order already been loaded by current user")
+var ErrOrderExistsForOtherUser = errors.New("order already been loaded by other user")
+
 type Order struct {
 	OrderID    string  `json:"number"`
 	Status     string  `json:"status"`

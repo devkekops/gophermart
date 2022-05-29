@@ -4,13 +4,16 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/devkekops/gophermart/internal/app/client"
 	"github.com/devkekops/gophermart/internal/app/config"
 	"github.com/devkekops/gophermart/internal/app/handlers"
 	"github.com/devkekops/gophermart/internal/app/storage"
 )
 
 func Serve(cfg *config.Config) error {
-	repo, err := storage.NewRepoDB(cfg.DatabaseURI)
+	client := client.NewClient(cfg.AccrualSystemAddress, cfg.ClientTimeout)
+
+	repo, err := storage.NewRepoDB(cfg.DatabaseURI, client)
 	if err != nil {
 		log.Fatal(err)
 	}

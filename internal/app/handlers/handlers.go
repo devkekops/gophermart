@@ -8,11 +8,24 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
+
+	"github.com/devkekops/gophermart/internal/app/storage"
+)
+
+const (
+	InvalidJSON          = "Invalid JSON"
+	LoginAlreadyInUse    = "Login already in use"
+	InternalServerError  = "Internal Server Error"
+	InvalidCredentials   = "Invalid credentials"
+	InvalidRequestFormat = "Invalid request format"
+	InvalidOrderNumber   = "Invalid order number"
 )
 
 type Credentials struct {
@@ -26,6 +39,30 @@ func getPasswordHash(password string) string {
 	hash := h.Sum(nil)
 	passwordHash := hex.EncodeToString(hash)
 	return passwordHash
+}
+
+func checkLuhn(orderID string) (bool, error) {
+	number, err := strconv.Atoi(orderID)
+	if err != nil {
+		return false, err
+	}
+	payload := number / 10
+
+	var luhn int
+	for i := 0; payload > 0; i++ {
+		cur := payload % 10
+		if i%2 == 0 { // even
+			cur = cur * 2
+			if cur > 9 {
+				cur = cur%10 + cur/10
+			}
+		}
+		luhn += cur
+		payload = payload / 10
+	}
+	checksum := luhn % 10
+
+	return (number%10+checksum)%10 == 0, nil
 }
 
 func createSession(userID string, secretKey string) string {
@@ -49,7 +86,7 @@ func (bh *BaseHandler) register() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		var creds Credentials
 		if err := json.NewDecoder(req.Body).Decode(&creds); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			http.Error(w, InvalidJSON, http.StatusBadRequest)
 			log.Println(err)
 			return
 		}
@@ -62,11 +99,11 @@ func (bh *BaseHandler) register() http.HandlerFunc {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) {
 				if pgerrcode.IsIntegrityConstraintViolation(pgErr.Code) {
-					http.Error(w, "Login already in use", http.StatusConflict)
+					http.Error(w, LoginAlreadyInUse, http.StatusConflict)
 					log.Println(err)
 					return
 				}
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				http.Error(w, InternalServerError, http.StatusInternalServerError)
 				log.Println(err)
 				return
 			}
@@ -87,7 +124,7 @@ func (bh *BaseHandler) login() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		var creds Credentials
 		if err := json.NewDecoder(req.Body).Decode(&creds); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			http.Error(w, InvalidJSON, http.StatusBadRequest)
 			log.Println(err)
 			return
 		}
@@ -98,7 +135,7 @@ func (bh *BaseHandler) login() http.HandlerFunc {
 		userID, err := bh.repo.AuthUser(creds.Login, passwordHash)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+				http.Error(w, InvalidCredentials, http.StatusUnauthorized)
 				log.Println(err)
 				return
 			}
@@ -124,7 +161,47 @@ func (bh *BaseHandler) login() http.HandlerFunc {
 
 func (bh *BaseHandler) loadOrder() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		userIDctx := req.Context().Value(userIDKey)
+		userID := userIDctx.(string)
 
+		b, err := io.ReadAll(req.Body)
+		if err != nil {
+			http.Error(w, InvalidRequestFormat, http.StatusBadRequest)
+			log.Println(err)
+			return
+		}
+		orderID := string(b)
+
+		check, err := checkLuhn(orderID)
+		if err != nil {
+			http.Error(w, InvalidRequestFormat, http.StatusBadRequest)
+			log.Println(err)
+			return
+		}
+
+		if !check {
+			http.Error(w, InvalidOrderNumber, http.StatusUnprocessableEntity)
+			return
+		}
+
+		err = bh.repo.LoadOrder(orderID, userID)
+		if err != nil {
+			if errors.Is(err, storage.ErrOrderExistsForCurrentUser) {
+				w.WriteHeader(http.StatusOK)
+				log.Println(err)
+				return
+			} else if errors.Is(err, storage.ErrOrderExistsForOtherUser) {
+				w.WriteHeader(http.StatusConflict)
+				log.Println(err)
+				return
+			} else {
+				http.Error(w, InvalidRequestFormat, http.StatusBadRequest)
+				log.Println(err)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusAccepted)
 	}
 }
 
