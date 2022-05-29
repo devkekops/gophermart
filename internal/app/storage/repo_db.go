@@ -150,15 +150,13 @@ func NewRepoDB(databaseURI string, client *client.Client) (*RepoDB, error) {
 }
 
 func (r *RepoDB) CreateUser(login string, passwordHash string) (string, error) {
-	querySaveUser := `INSERT INTO users (login, password_hash) VALUES ($1, $2)`
-	result, err := r.db.ExecContext(context.Background(), querySaveUser, login, passwordHash)
-	if err != nil {
+	var userID int64
+	querySaveUser := `INSERT INTO users (login, password_hash) VALUES ($1, $2) RETURNING user_id;`
+	row := r.db.QueryRowContext(context.Background(), querySaveUser, login, passwordHash)
+	if err := row.Scan(&userID); err != nil {
 		return "", err
 	}
-	userID, err := result.LastInsertId()
-	if err != nil {
-		return "", err
-	}
+
 	return strconv.FormatInt(userID, 10), nil
 }
 
@@ -169,6 +167,7 @@ func (r *RepoDB) AuthUser(login string, passwordHash string) (string, error) {
 	if err := row.Scan(&userID); err != nil {
 		return "", err
 	}
+
 	return strconv.FormatInt(userID, 10), nil
 }
 
@@ -193,7 +192,7 @@ func (r *RepoDB) LoadOrder(orderID string, userID string) error {
 	}
 
 	querySaveNewOrder := `INSERT INTO orders (order_id, user_id, status, uploaded_at) VALUES ($1, $2, $3, $4)`
-	_, err := r.db.ExecContext(context.Background(), querySaveNewOrder, orderID, userID, "NEW", time.Now())
+	_, err := r.db.ExecContext(context.Background(), querySaveNewOrder, orderID, userID, "NEW", time.Now().Truncate(time.Second))
 	if err != nil {
 		return err
 	}
@@ -206,8 +205,29 @@ func (r *RepoDB) LoadOrder(orderID string, userID string) error {
 }
 
 func (r *RepoDB) GetOrders(userID string) ([]Order, error) {
-	// Просто выводим содержимое таблицы order
-	return nil, nil
+	var orders []Order
+	queryGetOrders := "SELECT order_id, status, accrual, uploaded_at FROM orders WHERE user_id = ($1) ORDER BY uploaded_at ASC"
+	rows, err := r.db.QueryContext(context.Background(), queryGetOrders, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var o Order
+		err := rows.Scan(&o.OrderID, &o.Status, &o.Accrual, &o.UploadedAt)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, o)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return orders, nil
 }
 
 func (r *RepoDB) GetBalance(userID string) (Balance, error) {

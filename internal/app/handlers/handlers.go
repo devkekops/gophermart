@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -26,6 +27,8 @@ const (
 	InvalidCredentials   = "Invalid credentials"
 	InvalidRequestFormat = "Invalid request format"
 	InvalidOrderNumber   = "Invalid order number"
+	NoOrders             = "No orders"
+	NoWithdrawals        = "No withdrawals"
 )
 
 type Credentials struct {
@@ -67,7 +70,6 @@ func checkLuhn(orderID string) (bool, error) {
 
 func createSession(userID string, secretKey string) string {
 	userIDBytes := []byte(userID)
-	//fmt.Println(hex.EncodeToString(userIDBytes))
 
 	key := sha256.Sum256([]byte(secretKey))
 	h := hmac.New(sha256.New, key[:])
@@ -108,7 +110,9 @@ func (bh *BaseHandler) register() http.HandlerFunc {
 				return
 			}
 		}
+
 		session := createSession(userID, bh.secretKey)
+		//fmt.Println(session)
 		cookie := &http.Cookie{
 			Name:  cookieName,
 			Value: session,
@@ -207,6 +211,28 @@ func (bh *BaseHandler) loadOrder() http.HandlerFunc {
 
 func (bh *BaseHandler) getOrders() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		userIDctx := req.Context().Value(userIDKey)
+		userID := userIDctx.(string)
+
+		orders, err := bh.repo.GetOrders(userID)
+		fmt.Println(orders)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
+
+		if orders == nil {
+			http.Error(w, NoOrders, http.StatusNoContent)
+			return
+		}
+
+		var buf bytes.Buffer
+		json.NewEncoder(&buf).Encode(orders)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(buf.Bytes())
 	}
 }
 
@@ -228,7 +254,7 @@ func (bh *BaseHandler) withdrawals() http.HandlerFunc {
 		}
 
 		if withdrawals == nil {
-			http.Error(w, "No withdrawals", http.StatusNoContent)
+			http.Error(w, NoWithdrawals, http.StatusNoContent)
 			return
 		}
 
