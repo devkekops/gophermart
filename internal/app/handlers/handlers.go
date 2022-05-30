@@ -148,7 +148,7 @@ func (bh *BaseHandler) login() http.HandlerFunc {
 				log.Println(err)
 				return
 			}
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, InternalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
@@ -221,7 +221,7 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 
 		orders, err := bh.repo.GetOrders(userID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, InternalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
@@ -233,7 +233,7 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 
 		buf, err := json.Marshal(&orders)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, InternalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
@@ -251,7 +251,7 @@ func (bh *BaseHandler) getBalance() http.HandlerFunc {
 
 		balance, err := bh.repo.GetBalance(userID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, InternalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
@@ -313,7 +313,7 @@ func (bh *BaseHandler) withdrawals() http.HandlerFunc {
 
 		withdrawals, err := bh.repo.GetWithdrawals(userID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, InternalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
