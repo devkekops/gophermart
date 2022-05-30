@@ -28,11 +28,17 @@ const (
 	InvalidOrderNumber   = "Invalid order number"
 	NoOrders             = "No orders"
 	NoWithdrawals        = "No withdrawals"
+	InsufficientFunds    = "Insuficient funds"
 )
 
 type Credentials struct {
 	Login    string `json:"login"`
 	Password string `json:"password"`
+}
+
+type Withdrawal struct {
+	Order string  `json:"order"`
+	Sum   float64 `json:"sum"`
 }
 
 func getPasswordHash(password string) string {
@@ -257,6 +263,42 @@ func (bh *BaseHandler) getBalance() http.HandlerFunc {
 
 func (bh *BaseHandler) withdraw() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		userIDctx := req.Context().Value(userIDKey)
+		userID := userIDctx.(string)
+
+		var withdrawal Withdrawal
+		if err := json.NewDecoder(req.Body).Decode(&withdrawal); err != nil {
+			http.Error(w, InvalidJSON, http.StatusBadRequest)
+			log.Println(err)
+			return
+		}
+
+		check, err := checkLuhn(withdrawal.Order)
+		if err != nil {
+			http.Error(w, InvalidRequestFormat, http.StatusBadRequest)
+			log.Println(err)
+			return
+		}
+
+		if !check {
+			http.Error(w, InvalidOrderNumber, http.StatusUnprocessableEntity)
+			return
+		}
+
+		err = bh.repo.Withdraw(withdrawal.Order, userID, withdrawal.Sum)
+		if err != nil {
+			if errors.Is(err, storage.ErrInsufficientFunds) {
+				http.Error(w, InsufficientFunds, http.StatusPaymentRequired)
+				return
+			} else {
+				http.Error(w, InternalServerError, http.StatusBadRequest)
+				log.Println(err)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusOK)
+
 	}
 }
 

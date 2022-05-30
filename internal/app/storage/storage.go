@@ -4,6 +4,7 @@ import "errors"
 
 var ErrOrderExistsForCurrentUser = errors.New("order already been loaded by current user")
 var ErrOrderExistsForOtherUser = errors.New("order already been loaded by other user")
+var ErrInsufficientFunds = errors.New("insufficient funds")
 
 type Order struct {
 	OrderID    string  `json:"number" db:"order_id"`
@@ -29,7 +30,7 @@ type Repository interface {
 	LoadOrder(orderID string, userID string) error
 	GetOrders(userID string) ([]Order, error)
 	GetBalance(userID string) (Balance, error)
-	Withdraw(orderID string, sum float64) error
+	Withdraw(orderID string, userID string, sum float64) error
 	GetWithdrawals(userID string) ([]Withdrawal, error)
 	Close()
 }

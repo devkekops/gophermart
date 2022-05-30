@@ -272,7 +272,43 @@ func (r *RepoDB) GetBalance(userID string) (Balance, error) {
 	return balance, nil
 }
 
-func (r *RepoDB) Withdraw(orderID string, sum float64) error {
+func (r *RepoDB) Withdraw(orderID string, userID string, sum float64) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	queryCheckUserBalance := `SELECT current, withdrawn FROM users WHERE user_id = ($1)`
+	queryAddWithdraw := `INSERT INTO withdrawals (order_id, user_id, sum, processed_at) VALUES ($1, $2, $3, $4)`
+	queryUpdateUserBalance := `UPDATE users SET current = ($1), withdrawn = ($2) WHERE user_id = ($3)`
+
+	var balance Balance
+	err := r.db.Get(&balance, queryCheckUserBalance, userID)
+	if err != nil {
+		return err
+	}
+	if balance.Current < sum {
+		return fmt.Errorf("%w", ErrInsufficientFunds)
+	}
+
+	newBalance := Balance{balance.Current - sum, balance.Withdrawn + sum}
+
+	tx, err := r.db.Begin()
+	defer tx.Rollback()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(queryAddWithdraw, orderID, userID, sum, time.Now().Truncate(time.Second))
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(queryUpdateUserBalance, newBalance.Current, newBalance.Withdrawn, userID)
+	if err != nil {
+		return err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -281,7 +317,8 @@ func (r *RepoDB) GetWithdrawals(userID string) ([]Withdrawal, error) {
 	defer r.mutex.RUnlock()
 
 	var withdrawals []Withdrawal
-	queryGetWithdrawals := "SELECT order_id, sum, processed_at FROM withdrawals WHERE user = ($1) ORDER BY processed_at"
+	queryGetWithdrawals := "SELECT order_id, sum, processed_at FROM withdrawals WHERE user_id = ($1) ORDER BY processed_at ASC"
+
 	err := r.db.Select(&withdrawals, queryGetWithdrawals, userID)
 	if err != nil {
 		return nil, err
