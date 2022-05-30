@@ -13,7 +13,7 @@ func main() {
 	cfg := config.Config{
 		RunAddress:           "localhost:8081",
 		DatabaseURI:          "postgres://localhost:5432/gophermart",
-		AccrualSystemAddress: "localhost:8080",
+		AccrualSystemAddress: "http://localhost:8080",
 		SecretKey:            "asdhkhk1375jwh132",
 		ClientTimeout:        5,
 	}

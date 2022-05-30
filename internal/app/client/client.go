@@ -7,10 +7,7 @@ import (
 	"time"
 )
 
-const (
-	scheme    = "http://"
-	baseQuery = "/api/orders/"
-)
+const baseQuery = "/api/orders/"
 
 type AccrualResponse struct {
 	StatusCode int
@@ -36,7 +33,7 @@ func NewClient(host string, timeout int) *Client {
 
 func (c *Client) GetAccrualInfo(number string) (AccrualResponse, error) {
 	var accrualResp AccrualResponse
-	baseURL := scheme + c.host + baseQuery + number
+	baseURL := c.host + baseQuery + number
 	res, err := c.httpClient.Get(baseURL)
 	if err != nil {
 		return accrualResp, err
