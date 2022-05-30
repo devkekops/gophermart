@@ -231,12 +231,16 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 			return
 		}
 
-		var buf bytes.Buffer
-		json.NewEncoder(&buf).Encode(orders)
+		buf, err := json.Marshal(&orders)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(buf.Bytes())
+		w.Write(buf)
 	}
 }
 

@@ -1,15 +1,29 @@
 package storage
 
-import "errors"
+import (
+	"errors"
+)
 
 var ErrOrderExistsForCurrentUser = errors.New("order already been loaded by current user")
 var ErrOrderExistsForOtherUser = errors.New("order already been loaded by other user")
 var ErrInsufficientFunds = errors.New("insufficient funds")
 
+/*type NullFloat64 struct {
+	sql.NullFloat64
+}
+
+func (f *NullFloat64) MarshalJSON() ([]byte, error) {
+	if f.Valid {
+		return json.Marshal(f.Float64)
+	} else {
+		return json.Marshal(nil)
+	}
+}*/
+
 type Order struct {
 	OrderID    string  `json:"number" db:"order_id"`
 	Status     string  `json:"status" db:"status"`
-	Accrual    float64 `json:"accrual" db:"accrual"`
+	Accrual    float64 `json:"accrual,omitempty" db:"accrual"`
 	UploadedAt string  `json:"uploaded_at" db:"uploaded_at"`
 }
 
