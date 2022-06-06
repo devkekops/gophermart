@@ -28,7 +28,7 @@ const (
 	noOrders               = "No orders"
 	noWithdrawals          = "No withdrawals"
 	insufficientFunds      = "Insuficient funds"
-	invalidUserIDInContext = "Invalid userID in context"
+	invalidUserIDInContext = "invalid userID in context"
 )
 
 type Credentials struct {
