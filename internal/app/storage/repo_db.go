@@ -140,11 +140,11 @@ func (w *Worker) loop() {
 
 type RepoDB struct {
 	db     *sqlx.DB
-	client *client.Client
+	client client.Client
 	taskCh chan *Task
 }
 
-func NewRepoDB(databaseURI string, client *client.Client) (*RepoDB, error) {
+func NewRepoDB(databaseURI string, client client.Client) (*RepoDB, error) {
 	db, err := sqlx.Connect("pgx", databaseURI)
 	if err != nil {
 		return nil, err

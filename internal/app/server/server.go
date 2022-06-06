@@ -11,7 +11,7 @@ import (
 )
 
 func Serve(cfg *config.Config) error {
-	client := client.NewClient(cfg.AccrualSystemAddress, cfg.ClientTimeout)
+	client := client.NewCli(cfg.AccrualSystemAddress, cfg.ClientTimeout)
 
 	repo, err := storage.NewRepoDB(cfg.DatabaseURI, client)
 	if err != nil {
