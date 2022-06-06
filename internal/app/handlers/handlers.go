@@ -79,11 +79,9 @@ func createSession(userID string, secretKey string) string {
 	h := hmac.New(sha256.New, key[:])
 	h.Write(userIDBytes)
 	dst := h.Sum(nil)
-	//fmt.Println(hex.EncodeToString(dst))
 
 	sessionBytes := append(userIDBytes[:], dst[:]...)
 	session := hex.EncodeToString(sessionBytes)
-	//fmt.Println(session)
 
 	return session
 }
@@ -98,7 +96,6 @@ func (bh *BaseHandler) register() http.HandlerFunc {
 		}
 
 		passwordHash := getPasswordHash(creds.Password)
-		//fmt.Println(passwordHash)
 
 		userID, err := bh.repo.CreateUser(creds.Login, passwordHash)
 		if err != nil {
@@ -116,7 +113,6 @@ func (bh *BaseHandler) register() http.HandlerFunc {
 		}
 
 		session := createSession(userID, bh.secretKey)
-		//fmt.Println(session)
 		cookie := &http.Cookie{
 			Name:  cookieName,
 			Value: session,
@@ -138,7 +134,6 @@ func (bh *BaseHandler) login() http.HandlerFunc {
 		}
 
 		passwordHash := getPasswordHash(creds.Password)
-		//fmt.Println(passwordHash)
 
 		userID, err := bh.repo.AuthUser(creds.Login, passwordHash)
 		if err != nil {
@@ -151,10 +146,8 @@ func (bh *BaseHandler) login() http.HandlerFunc {
 			log.Println(err)
 			return
 		}
-		//fmt.Println(userID)
 
 		session := createSession(userID, bh.secretKey)
-		//fmt.Println(session)
 
 		cookie := &http.Cookie{
 			Name:  cookieName,
