@@ -7,8 +7,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
+
+	"github.com/devkekops/gophermart/internal/app/logger"
 )
 
 type key string
@@ -54,7 +55,7 @@ func authHandle(secretKey string) (ah func(http.Handler) http.Handler) {
 			if err != nil {
 				if errors.Is(err, http.ErrNoCookie) {
 					http.Error(w, invalidCredentials, http.StatusUnauthorized)
-					log.Println(err)
+					logger.Logger.Err(err).Msg("")
 					return
 				}
 			} else {
@@ -62,7 +63,7 @@ func authHandle(secretKey string) (ah func(http.Handler) http.Handler) {
 				userID, err := checkSignature(cookieValue, []byte(secretKey))
 				if err != nil {
 					http.Error(w, invalidCookie, http.StatusUnauthorized)
-					log.Println(err)
+					logger.Logger.Err(err).Msg("")
 					return
 				}
 				ctx := context.WithValue(r.Context(), userIDKey, userID)

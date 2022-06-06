@@ -2,8 +2,9 @@ package handlers
 
 import (
 	"compress/gzip"
-	"log"
 	"net/http"
+
+	"github.com/devkekops/gophermart/internal/app/logger"
 )
 
 func gzipHandle(next http.Handler) http.Handler {
@@ -12,7 +13,7 @@ func gzipHandle(next http.Handler) http.Handler {
 			gz, err := gzip.NewReader(r.Body)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
-				log.Println(err)
+				logger.Logger.Err(err).Msg("")
 				return
 			}
 			defer gz.Close()

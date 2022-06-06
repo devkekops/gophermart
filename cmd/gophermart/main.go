@@ -3,18 +3,20 @@ package main
 import (
 	"crypto/rand"
 	"flag"
-	"log"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/devkekops/gophermart/internal/app/config"
+	"github.com/devkekops/gophermart/internal/app/logger"
 	"github.com/devkekops/gophermart/internal/app/server"
 )
 
 func main() {
+	logger.InitLog()
+
 	randBytes := make([]byte, 16)
 	_, err := rand.Read(randBytes)
 	if err != nil {
-		log.Fatal(err)
+		logger.Logger.Fatal().Err(err).Msg("")
 		return
 	}
 	secretKey := string(randBytes)
@@ -28,7 +30,7 @@ func main() {
 	}
 
 	if err := env.Parse(&cfg); err != nil {
-		log.Fatal(err)
+		logger.Logger.Fatal().Err(err).Msg("")
 		return
 	}
 
@@ -38,5 +40,5 @@ func main() {
 	flag.StringVar(&cfg.SecretKey, "s", cfg.SecretKey, "secret key")
 	flag.Parse()
 
-	log.Fatal(server.Serve(&cfg))
+	logger.Logger.Fatal().Err(server.Serve(&cfg)).Msg("")
 }

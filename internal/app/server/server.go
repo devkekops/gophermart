@@ -1,12 +1,12 @@
 package server
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/devkekops/gophermart/internal/app/client"
 	"github.com/devkekops/gophermart/internal/app/config"
 	"github.com/devkekops/gophermart/internal/app/handlers"
+	"github.com/devkekops/gophermart/internal/app/logger"
 	"github.com/devkekops/gophermart/internal/app/storage"
 )
 
@@ -15,7 +15,7 @@ func Serve(cfg *config.Config) error {
 
 	repo, err := storage.NewRepoDB(cfg.DatabaseURI, client)
 	if err != nil {
-		log.Fatal(err)
+		logger.Logger.Err(err).Msg("")
 	}
 	defer repo.Close()
 

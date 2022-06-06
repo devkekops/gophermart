@@ -8,26 +8,27 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
 
+	"github.com/devkekops/gophermart/internal/app/logger"
 	"github.com/devkekops/gophermart/internal/app/storage"
 )
 
 const (
-	invalidJSON          = "Invalid JSON"
-	loginAlreadyInUse    = "Login already in use"
-	internalServerError  = "Internal Server Error"
-	invalidCredentials   = "Invalid credentials"
-	invalidRequestFormat = "Invalid request format"
-	invalidOrderNumber   = "Invalid order number"
-	noOrders             = "No orders"
-	noWithdrawals        = "No withdrawals"
-	insufficientFunds    = "Insuficient funds"
+	invalidJSON            = "Invalid JSON"
+	loginAlreadyInUse      = "Login already in use"
+	internalServerError    = "Internal Server Error"
+	invalidCredentials     = "Invalid credentials"
+	invalidRequestFormat   = "Invalid request format"
+	invalidOrderNumber     = "Invalid order number"
+	noOrders               = "No orders"
+	noWithdrawals          = "No withdrawals"
+	insufficientFunds      = "Insuficient funds"
+	invalidUserIDInContext = "Invalid userID in context"
 )
 
 type Credentials struct {
@@ -90,7 +91,7 @@ func getUserID(req *http.Request) (string, error) {
 	userIDctx := req.Context().Value(userIDKey)
 	userID, ok := userIDctx.(string)
 	if !ok {
-		return "", errors.New("invalid userID in context")
+		return "", errors.New(invalidUserIDInContext)
 	}
 	return userID, nil
 }
@@ -100,7 +101,7 @@ func (bh *BaseHandler) register() http.HandlerFunc {
 		var creds Credentials
 		if err := json.NewDecoder(req.Body).Decode(&creds); err != nil {
 			http.Error(w, invalidJSON, http.StatusBadRequest)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
@@ -112,11 +113,11 @@ func (bh *BaseHandler) register() http.HandlerFunc {
 			if errors.As(err, &pgErr) {
 				if pgerrcode.IsIntegrityConstraintViolation(pgErr.Code) {
 					http.Error(w, loginAlreadyInUse, http.StatusConflict)
-					log.Println(err)
+					logger.Logger.Err(err).Msg("")
 					return
 				}
 				http.Error(w, internalServerError, http.StatusInternalServerError)
-				log.Println(err)
+				logger.Logger.Err(err).Msg("")
 				return
 			}
 		}
@@ -138,7 +139,7 @@ func (bh *BaseHandler) login() http.HandlerFunc {
 		var creds Credentials
 		if err := json.NewDecoder(req.Body).Decode(&creds); err != nil {
 			http.Error(w, invalidJSON, http.StatusBadRequest)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
@@ -148,11 +149,11 @@ func (bh *BaseHandler) login() http.HandlerFunc {
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				http.Error(w, invalidCredentials, http.StatusUnauthorized)
-				log.Println(err)
+				logger.Logger.Err(err).Msg("")
 				return
 			}
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
@@ -174,14 +175,14 @@ func (bh *BaseHandler) loadOrder() http.HandlerFunc {
 		userID, err := getUserID(req)
 		if err != nil {
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
 		b, err := io.ReadAll(req.Body)
 		if err != nil {
 			http.Error(w, invalidRequestFormat, http.StatusBadRequest)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 		orderID := string(b)
@@ -189,7 +190,7 @@ func (bh *BaseHandler) loadOrder() http.HandlerFunc {
 		check, err := checkLuhn(orderID)
 		if err != nil {
 			http.Error(w, invalidRequestFormat, http.StatusBadRequest)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
@@ -202,15 +203,15 @@ func (bh *BaseHandler) loadOrder() http.HandlerFunc {
 		if err != nil {
 			if errors.Is(err, storage.ErrOrderExistsForCurrentUser) {
 				w.WriteHeader(http.StatusOK)
-				log.Println(err)
+				logger.Logger.Err(err).Msg("")
 				return
 			} else if errors.Is(err, storage.ErrOrderExistsForOtherUser) {
 				w.WriteHeader(http.StatusConflict)
-				log.Println(err)
+				logger.Logger.Err(err).Msg("")
 				return
 			} else {
 				http.Error(w, invalidRequestFormat, http.StatusBadRequest)
-				log.Println(err)
+				logger.Logger.Err(err).Msg("")
 				return
 			}
 		}
@@ -224,14 +225,14 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 		userID, err := getUserID(req)
 		if err != nil {
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
 		orders, err := bh.repo.GetOrders(userID)
 		if err != nil {
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
@@ -243,7 +244,7 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 		buf, err := json.Marshal(orders)
 		if err != nil {
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
@@ -251,7 +252,7 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		_, err = w.Write(buf)
 		if err != nil {
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 		}
 	}
 }
@@ -261,21 +262,21 @@ func (bh *BaseHandler) getBalance() http.HandlerFunc {
 		userID, err := getUserID(req)
 		if err != nil {
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
 		balance, err := bh.repo.GetBalance(userID)
 		if err != nil {
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
 		buf, err := json.Marshal(balance)
 		if err != nil {
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
@@ -283,7 +284,7 @@ func (bh *BaseHandler) getBalance() http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		_, err = w.Write(buf)
 		if err != nil {
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 		}
 	}
 }
@@ -293,26 +294,27 @@ func (bh *BaseHandler) withdraw() http.HandlerFunc {
 		userID, err := getUserID(req)
 		if err != nil {
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
 		var withdrawal Withdrawal
 		if err := json.NewDecoder(req.Body).Decode(&withdrawal); err != nil {
 			http.Error(w, invalidJSON, http.StatusBadRequest)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
 		check, err := checkLuhn(withdrawal.Order)
 		if err != nil {
 			http.Error(w, invalidRequestFormat, http.StatusBadRequest)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
 		if !check {
 			http.Error(w, invalidOrderNumber, http.StatusUnprocessableEntity)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
@@ -323,7 +325,7 @@ func (bh *BaseHandler) withdraw() http.HandlerFunc {
 				return
 			} else {
 				http.Error(w, internalServerError, http.StatusBadRequest)
-				log.Println(err)
+				logger.Logger.Err(err).Msg("")
 				return
 			}
 		}
@@ -338,14 +340,14 @@ func (bh *BaseHandler) withdrawals() http.HandlerFunc {
 		userID, err := getUserID(req)
 		if err != nil {
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
 		withdrawals, err := bh.repo.GetWithdrawals(userID)
 		if err != nil {
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
@@ -357,7 +359,7 @@ func (bh *BaseHandler) withdrawals() http.HandlerFunc {
 		buf, err := json.Marshal(withdrawals)
 		if err != nil {
 			http.Error(w, internalServerError, http.StatusInternalServerError)
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 			return
 		}
 
@@ -365,7 +367,7 @@ func (bh *BaseHandler) withdrawals() http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		_, err = w.Write(buf)
 		if err != nil {
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 		}
 	}
 }

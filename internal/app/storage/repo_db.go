@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"runtime"
 	"strconv"
 	"time"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/devkekops/gophermart/internal/app/client"
 	"github.com/devkekops/gophermart/internal/app/entity"
+	"github.com/devkekops/gophermart/internal/app/logger"
 )
 
 const (
@@ -75,14 +75,13 @@ func (w *Worker) loop() {
 			task := <-w.repo.taskCh
 			_, err := w.repo.db.Exec(queryUpdateOrderStatus, NEW, task.orderID)
 			if err != nil {
-				log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
+				logger.Logger.Error().Msgf("worker #%d task #%v error: %v\n", w.id, task, err)
 			}
 
 			accrualResp, err := w.repo.client.GetAccrualInfo(task.orderID)
 			if err != nil {
-				log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
+				logger.Logger.Error().Msgf("worker #%d task #%v error: %v\n", w.id, task, err)
 			}
-			fmt.Printf("worker #%d processed order %s, accrualResp: %v\n", w.id, task.orderID, accrualResp)
 
 			switch accrualResp.StatusCode {
 			case 200:
@@ -93,39 +92,39 @@ func (w *Worker) loop() {
 				case PROCESSING:
 					_, err := w.repo.db.Exec(queryUpdateOrderStatus, PROCESSING, task.orderID)
 					if err != nil {
-						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
+						logger.Logger.Error().Msgf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
 					w.repo.taskCh <- task
 
 				case INVALID:
 					_, err := w.repo.db.Exec(queryUpdateOrderStatus, INVALID, task.orderID)
 					if err != nil {
-						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
+						logger.Logger.Error().Msgf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
 
 				case PROCESSED:
 					tx, err := w.repo.db.Begin()
 					if err != nil {
-						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
+						logger.Logger.Error().Msgf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
 					defer func(tx *sql.Tx) {
 						err := tx.Rollback()
 						if err != nil {
-							log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
+							logger.Logger.Error().Msgf("worker #%d task #%v error: %v\n", w.id, task, err)
 						}
 					}(tx)
 
 					_, err = tx.Exec(queryUpdateOrderStatusAccrual, PROCESSED, accrualResp.Accrual, task.orderID)
 					if err != nil {
-						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
+						logger.Logger.Error().Msgf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
 					_, err = tx.Exec(queryUpdateUserCurrent, accrualResp.Accrual, task.userID)
 					if err != nil {
-						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
+						logger.Logger.Error().Msgf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
 					err = tx.Commit()
 					if err != nil {
-						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
+						logger.Logger.Error().Msgf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
 				}
 			case 429:
@@ -246,9 +245,6 @@ func (r *RepoDB) GetBalance(userID string) (entity.Balance, error) {
 }
 
 func (r *RepoDB) Withdraw(orderID string, userID string, sum float64) error {
-	queryUpdateUserBalance := `UPDATE users SET current = current - ($1), withdrawn = withdrawn + ($1) WHERE user_id = ($2) RETURNING current`
-	queryAddWithdraw := `INSERT INTO withdrawals (order_id, user_id, sum, processed_at) VALUES ($1, $2, $3, $4)`
-
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
@@ -256,11 +252,12 @@ func (r *RepoDB) Withdraw(orderID string, userID string, sum float64) error {
 	defer func(tx *sql.Tx) {
 		err := tx.Rollback()
 		if err != nil {
-			log.Println(err)
+			logger.Logger.Err(err).Msg("")
 		}
 	}(tx)
 
 	var newBalance float64
+	queryUpdateUserBalance := `UPDATE users SET current = current - ($1), withdrawn = withdrawn + ($1) WHERE user_id = ($2) RETURNING current`
 	err = tx.QueryRow(queryUpdateUserBalance, sum, userID).Scan(&newBalance)
 	if err != nil {
 		return err
@@ -269,6 +266,7 @@ func (r *RepoDB) Withdraw(orderID string, userID string, sum float64) error {
 		return ErrInsufficientFunds
 	}
 
+	queryAddWithdraw := `INSERT INTO withdrawals (order_id, user_id, sum, processed_at) VALUES ($1, $2, $3, $4)`
 	_, err = tx.Exec(queryAddWithdraw, orderID, userID, sum, time.Now().Truncate(time.Second))
 	if err != nil {
 		return err
