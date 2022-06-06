@@ -19,11 +19,6 @@ const (
 	userIDKey  key = "userID"
 )
 
-type Session struct {
-	userID      string
-	cookieValue string
-}
-
 func checkSignature(cookieValue string, secretKey []byte) (string, error) {
 	session, err := hex.DecodeString(cookieValue)
 	if err != nil {

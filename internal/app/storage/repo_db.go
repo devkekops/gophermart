@@ -120,7 +120,12 @@ func (w *Worker) loop() {
 					newCurrent := current + accrualResp.Accrual
 
 					tx, err := w.repo.db.Begin()
-					defer tx.Rollback()
+					defer func(tx *sql.Tx) {
+						err := tx.Rollback()
+						if err != nil {
+							log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
+						}
+					}(tx)
 					if err != nil {
 						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
@@ -292,7 +297,13 @@ func (r *RepoDB) Withdraw(orderID string, userID string, sum float64) error {
 	newBalance := Balance{balance.Current - sum, balance.Withdrawn + sum}
 
 	tx, err := r.db.Begin()
-	defer tx.Rollback()
+	defer func(tx *sql.Tx) {
+		err := tx.Rollback()
+		if err != nil {
+			log.Println(err)
+		}
+	}(tx)
+
 	if err != nil {
 		return err
 	}

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
@@ -231,7 +230,7 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 			return
 		}
 
-		buf, err := json.Marshal(&orders)
+		buf, err := json.Marshal(orders)
 		if err != nil {
 			http.Error(w, InternalServerError, http.StatusInternalServerError)
 			log.Println(err)
@@ -240,7 +239,10 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(buf)
+		_, err = w.Write(buf)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
@@ -256,12 +258,19 @@ func (bh *BaseHandler) getBalance() http.HandlerFunc {
 			return
 		}
 
-		var buf bytes.Buffer
-		json.NewEncoder(&buf).Encode(balance)
+		buf, err := json.Marshal(balance)
+		if err != nil {
+			http.Error(w, InternalServerError, http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(buf.Bytes())
+		_, err = w.Write(buf)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
@@ -323,11 +332,18 @@ func (bh *BaseHandler) withdrawals() http.HandlerFunc {
 			return
 		}
 
-		var buf bytes.Buffer
-		json.NewEncoder(&buf).Encode(withdrawals)
+		buf, err := json.Marshal(withdrawals)
+		if err != nil {
+			http.Error(w, InternalServerError, http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(buf.Bytes())
+		_, err = w.Write(buf)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
