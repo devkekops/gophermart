@@ -86,6 +86,15 @@ func createSession(userID string, secretKey string) string {
 	return session
 }
 
+func getUserID(req *http.Request) (string, error) {
+	userIDctx := req.Context().Value(userIDKey)
+	userID, ok := userIDctx.(string)
+	if !ok {
+		return "", errors.New("invalid userID in context")
+	}
+	return userID, nil
+}
+
 func (bh *BaseHandler) register() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		var creds Credentials
@@ -162,8 +171,12 @@ func (bh *BaseHandler) login() http.HandlerFunc {
 
 func (bh *BaseHandler) loadOrder() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		userIDctx := req.Context().Value(userIDKey)
-		userID := userIDctx.(string)
+		userID, err := getUserID(req)
+		if err != nil {
+			http.Error(w, internalServerError, http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
 
 		b, err := io.ReadAll(req.Body)
 		if err != nil {
@@ -208,8 +221,12 @@ func (bh *BaseHandler) loadOrder() http.HandlerFunc {
 
 func (bh *BaseHandler) getOrders() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		userIDctx := req.Context().Value(userIDKey)
-		userID := userIDctx.(string)
+		userID, err := getUserID(req)
+		if err != nil {
+			http.Error(w, internalServerError, http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
 
 		orders, err := bh.repo.GetOrders(userID)
 		if err != nil {
@@ -241,8 +258,12 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 
 func (bh *BaseHandler) getBalance() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		userIDctx := req.Context().Value(userIDKey)
-		userID := userIDctx.(string)
+		userID, err := getUserID(req)
+		if err != nil {
+			http.Error(w, internalServerError, http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
 
 		balance, err := bh.repo.GetBalance(userID)
 		if err != nil {
@@ -269,8 +290,12 @@ func (bh *BaseHandler) getBalance() http.HandlerFunc {
 
 func (bh *BaseHandler) withdraw() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		userIDctx := req.Context().Value(userIDKey)
-		userID := userIDctx.(string)
+		userID, err := getUserID(req)
+		if err != nil {
+			http.Error(w, internalServerError, http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
 
 		var withdrawal Withdrawal
 		if err := json.NewDecoder(req.Body).Decode(&withdrawal); err != nil {
@@ -310,8 +335,12 @@ func (bh *BaseHandler) withdraw() http.HandlerFunc {
 
 func (bh *BaseHandler) withdrawals() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		userIDctx := req.Context().Value(userIDKey)
-		userID := userIDctx.(string)
+		userID, err := getUserID(req)
+		if err != nil {
+			http.Error(w, internalServerError, http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
 
 		withdrawals, err := bh.repo.GetWithdrawals(userID)
 		if err != nil {

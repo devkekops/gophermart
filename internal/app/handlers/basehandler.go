@@ -7,27 +7,27 @@ import (
 )
 
 type BaseHandler struct {
-	*chi.Mux
+	mux       *chi.Mux
 	secretKey string
 	repo      storage.Repository
 }
 
-func NewBaseHandler(repo storage.Repository, secretKey string) *BaseHandler {
+func NewBaseHandler(repo storage.Repository, secretKey string) *chi.Mux {
 	bh := &BaseHandler{
-		Mux:       chi.NewMux(),
+		mux:       chi.NewMux(),
 		secretKey: secretKey,
 		repo:      repo,
 	}
 
-	bh.Use(middleware.RequestID)
-	bh.Use(middleware.RealIP)
-	bh.Use(middleware.Logger)
-	bh.Use(middleware.Recoverer)
+	bh.mux.Use(middleware.RequestID)
+	bh.mux.Use(middleware.RealIP)
+	bh.mux.Use(middleware.Logger)
+	bh.mux.Use(middleware.Recoverer)
 
-	bh.Use(middleware.Compress(5))
-	bh.Use(gzipHandle)
+	bh.mux.Use(middleware.Compress(5))
+	bh.mux.Use(gzipHandle)
 
-	bh.Route("/api/user", func(r chi.Router) {
+	bh.mux.Route("/api/user", func(r chi.Router) {
 		r.Post("/register", bh.register())
 		r.Post("/login", bh.login())
 
@@ -44,5 +44,5 @@ func NewBaseHandler(repo storage.Repository, secretKey string) *BaseHandler {
 		})
 	})
 
-	return bh
+	return bh.mux
 }
