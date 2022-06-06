@@ -14,9 +14,11 @@ import (
 type key string
 
 const (
-	cookieName     = "session"
-	cookiePath     = "/"
-	userIDKey  key = "userID"
+	cookieName          = "session"
+	cookiePath          = "/"
+	userIDKey       key = "userID"
+	signatureLength     = 32
+	invalidCookie       = "Invalid cookie"
 )
 
 func checkSignature(cookieValue string, secretKey []byte) (string, error) {
@@ -25,11 +27,11 @@ func checkSignature(cookieValue string, secretKey []byte) (string, error) {
 		return "", err
 	}
 
-	if len(session) < 33 {
+	if len(session) <= signatureLength {
 		return "", fmt.Errorf("invalid cookie length")
 	}
 
-	userIDLength := len(session) - 32
+	userIDLength := len(session) - signatureLength
 	userID := session[:userIDLength]
 
 	key := sha256.Sum256(secretKey)
@@ -48,19 +50,18 @@ func authHandle(secretKey string) (ah func(http.Handler) http.Handler) {
 	ah = func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			sessionCookie, err := r.Cookie(cookieName)
-			secretKeyByte := []byte(secretKey)
 
 			if err != nil {
 				if errors.Is(err, http.ErrNoCookie) {
-					http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+					http.Error(w, invalidCredentials, http.StatusUnauthorized)
 					log.Println(err)
 					return
 				}
 			} else {
 				cookieValue := sessionCookie.Value
-				userID, err := checkSignature(cookieValue, secretKeyByte)
+				userID, err := checkSignature(cookieValue, []byte(secretKey))
 				if err != nil {
-					http.Error(w, "Invalid cookie", http.StatusUnauthorized)
+					http.Error(w, invalidCookie, http.StatusUnauthorized)
 					log.Println(err)
 					return
 				}

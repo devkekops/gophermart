@@ -19,15 +19,15 @@ import (
 )
 
 const (
-	InvalidJSON          = "Invalid JSON"
-	LoginAlreadyInUse    = "Login already in use"
-	InternalServerError  = "Internal Server Error"
-	InvalidCredentials   = "Invalid credentials"
-	InvalidRequestFormat = "Invalid request format"
-	InvalidOrderNumber   = "Invalid order number"
-	NoOrders             = "No orders"
-	NoWithdrawals        = "No withdrawals"
-	InsufficientFunds    = "Insuficient funds"
+	invalidJSON          = "Invalid JSON"
+	loginAlreadyInUse    = "Login already in use"
+	internalServerError  = "Internal Server Error"
+	invalidCredentials   = "Invalid credentials"
+	invalidRequestFormat = "Invalid request format"
+	invalidOrderNumber   = "Invalid order number"
+	noOrders             = "No orders"
+	noWithdrawals        = "No withdrawals"
+	insufficientFunds    = "Insuficient funds"
 )
 
 type Credentials struct {
@@ -90,7 +90,7 @@ func (bh *BaseHandler) register() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		var creds Credentials
 		if err := json.NewDecoder(req.Body).Decode(&creds); err != nil {
-			http.Error(w, InvalidJSON, http.StatusBadRequest)
+			http.Error(w, invalidJSON, http.StatusBadRequest)
 			log.Println(err)
 			return
 		}
@@ -102,11 +102,11 @@ func (bh *BaseHandler) register() http.HandlerFunc {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) {
 				if pgerrcode.IsIntegrityConstraintViolation(pgErr.Code) {
-					http.Error(w, LoginAlreadyInUse, http.StatusConflict)
+					http.Error(w, loginAlreadyInUse, http.StatusConflict)
 					log.Println(err)
 					return
 				}
-				http.Error(w, InternalServerError, http.StatusInternalServerError)
+				http.Error(w, internalServerError, http.StatusInternalServerError)
 				log.Println(err)
 				return
 			}
@@ -128,7 +128,7 @@ func (bh *BaseHandler) login() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		var creds Credentials
 		if err := json.NewDecoder(req.Body).Decode(&creds); err != nil {
-			http.Error(w, InvalidJSON, http.StatusBadRequest)
+			http.Error(w, invalidJSON, http.StatusBadRequest)
 			log.Println(err)
 			return
 		}
@@ -138,11 +138,11 @@ func (bh *BaseHandler) login() http.HandlerFunc {
 		userID, err := bh.repo.AuthUser(creds.Login, passwordHash)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, InvalidCredentials, http.StatusUnauthorized)
+				http.Error(w, invalidCredentials, http.StatusUnauthorized)
 				log.Println(err)
 				return
 			}
-			http.Error(w, InternalServerError, http.StatusInternalServerError)
+			http.Error(w, internalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
@@ -167,7 +167,7 @@ func (bh *BaseHandler) loadOrder() http.HandlerFunc {
 
 		b, err := io.ReadAll(req.Body)
 		if err != nil {
-			http.Error(w, InvalidRequestFormat, http.StatusBadRequest)
+			http.Error(w, invalidRequestFormat, http.StatusBadRequest)
 			log.Println(err)
 			return
 		}
@@ -175,13 +175,13 @@ func (bh *BaseHandler) loadOrder() http.HandlerFunc {
 
 		check, err := checkLuhn(orderID)
 		if err != nil {
-			http.Error(w, InvalidRequestFormat, http.StatusBadRequest)
+			http.Error(w, invalidRequestFormat, http.StatusBadRequest)
 			log.Println(err)
 			return
 		}
 
 		if !check {
-			http.Error(w, InvalidOrderNumber, http.StatusUnprocessableEntity)
+			http.Error(w, invalidOrderNumber, http.StatusUnprocessableEntity)
 			return
 		}
 
@@ -196,7 +196,7 @@ func (bh *BaseHandler) loadOrder() http.HandlerFunc {
 				log.Println(err)
 				return
 			} else {
-				http.Error(w, InvalidRequestFormat, http.StatusBadRequest)
+				http.Error(w, invalidRequestFormat, http.StatusBadRequest)
 				log.Println(err)
 				return
 			}
@@ -213,19 +213,19 @@ func (bh *BaseHandler) getOrders() http.HandlerFunc {
 
 		orders, err := bh.repo.GetOrders(userID)
 		if err != nil {
-			http.Error(w, InternalServerError, http.StatusInternalServerError)
+			http.Error(w, internalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
 
 		if orders == nil {
-			http.Error(w, NoOrders, http.StatusNoContent)
+			http.Error(w, noOrders, http.StatusNoContent)
 			return
 		}
 
 		buf, err := json.Marshal(orders)
 		if err != nil {
-			http.Error(w, InternalServerError, http.StatusInternalServerError)
+			http.Error(w, internalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
@@ -246,14 +246,14 @@ func (bh *BaseHandler) getBalance() http.HandlerFunc {
 
 		balance, err := bh.repo.GetBalance(userID)
 		if err != nil {
-			http.Error(w, InternalServerError, http.StatusInternalServerError)
+			http.Error(w, internalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
 
 		buf, err := json.Marshal(balance)
 		if err != nil {
-			http.Error(w, InternalServerError, http.StatusInternalServerError)
+			http.Error(w, internalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
@@ -274,30 +274,30 @@ func (bh *BaseHandler) withdraw() http.HandlerFunc {
 
 		var withdrawal Withdrawal
 		if err := json.NewDecoder(req.Body).Decode(&withdrawal); err != nil {
-			http.Error(w, InvalidJSON, http.StatusBadRequest)
+			http.Error(w, invalidJSON, http.StatusBadRequest)
 			log.Println(err)
 			return
 		}
 
 		check, err := checkLuhn(withdrawal.Order)
 		if err != nil {
-			http.Error(w, InvalidRequestFormat, http.StatusBadRequest)
+			http.Error(w, invalidRequestFormat, http.StatusBadRequest)
 			log.Println(err)
 			return
 		}
 
 		if !check {
-			http.Error(w, InvalidOrderNumber, http.StatusUnprocessableEntity)
+			http.Error(w, invalidOrderNumber, http.StatusUnprocessableEntity)
 			return
 		}
 
 		err = bh.repo.Withdraw(withdrawal.Order, userID, withdrawal.Sum)
 		if err != nil {
 			if errors.Is(err, storage.ErrInsufficientFunds) {
-				http.Error(w, InsufficientFunds, http.StatusPaymentRequired)
+				http.Error(w, insufficientFunds, http.StatusPaymentRequired)
 				return
 			} else {
-				http.Error(w, InternalServerError, http.StatusBadRequest)
+				http.Error(w, internalServerError, http.StatusBadRequest)
 				log.Println(err)
 				return
 			}
@@ -315,19 +315,19 @@ func (bh *BaseHandler) withdrawals() http.HandlerFunc {
 
 		withdrawals, err := bh.repo.GetWithdrawals(userID)
 		if err != nil {
-			http.Error(w, InternalServerError, http.StatusInternalServerError)
+			http.Error(w, internalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
 
 		if withdrawals == nil {
-			http.Error(w, NoWithdrawals, http.StatusNoContent)
+			http.Error(w, noWithdrawals, http.StatusNoContent)
 			return
 		}
 
 		buf, err := json.Marshal(withdrawals)
 		if err != nil {
-			http.Error(w, InternalServerError, http.StatusInternalServerError)
+			http.Error(w, internalServerError, http.StatusInternalServerError)
 			log.Println(err)
 			return
 		}
