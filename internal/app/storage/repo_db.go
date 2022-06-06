@@ -13,6 +13,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"github.com/devkekops/gophermart/internal/app/client"
+	"github.com/devkekops/gophermart/internal/app/entity"
 )
 
 const (
@@ -223,8 +224,8 @@ func (r *RepoDB) LoadOrder(orderID string, userID string) error {
 	return nil
 }
 
-func (r *RepoDB) GetOrders(userID string) ([]Order, error) {
-	var orders []Order
+func (r *RepoDB) GetOrders(userID string) ([]entity.Order, error) {
+	var orders []entity.Order
 	queryGetOrders := "SELECT order_id, status, accrual, uploaded_at FROM orders WHERE user_id = ($1) ORDER BY uploaded_at ASC"
 	err := r.db.Select(&orders, queryGetOrders, userID)
 	if err != nil {
@@ -234,8 +235,8 @@ func (r *RepoDB) GetOrders(userID string) ([]Order, error) {
 	return orders, nil
 }
 
-func (r *RepoDB) GetBalance(userID string) (Balance, error) {
-	var balance Balance
+func (r *RepoDB) GetBalance(userID string) (entity.Balance, error) {
+	var balance entity.Balance
 	queryGetBalance := `SELECT current, withdrawn FROM users WHERE user_id = ($1)`
 	err := r.db.Get(&balance, queryGetBalance, userID)
 	if err != nil {
@@ -281,8 +282,8 @@ func (r *RepoDB) Withdraw(orderID string, userID string, sum float64) error {
 	return nil
 }
 
-func (r *RepoDB) GetWithdrawals(userID string) ([]Withdrawal, error) {
-	var withdrawals []Withdrawal
+func (r *RepoDB) GetWithdrawals(userID string) ([]entity.Withdrawal, error) {
+	var withdrawals []entity.Withdrawal
 	queryGetWithdrawals := "SELECT order_id, sum, processed_at FROM withdrawals WHERE user_id = ($1) ORDER BY processed_at ASC"
 
 	err := r.db.Select(&withdrawals, queryGetWithdrawals, userID)
