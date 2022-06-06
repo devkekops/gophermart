@@ -7,7 +7,6 @@ import (
 	"log"
 	"runtime"
 	"strconv"
-	"sync"
 	"time"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -66,17 +65,14 @@ func (w *Worker) loop() {
 	//		- при статус коде 429 - можешь прийти не раньше чем через 5(или какое-то другое число) секунд (сделать на channel-ах retry)
 	queryUpdateOrderStatus := `UPDATE orders SET status = ($1) WHERE order_id = ($2)`
 	queryUpdateOrderStatusAccrual := `UPDATE orders SET status = ($1), accrual = ($2) WHERE order_id = ($3)`
-	queryCheckUserCurrent := `SELECT current FROM users WHERE user_id = ($1)`
-	queryUpdateUserCurrent := `UPDATE users SET current = ($1) WHERE user_id = ($2)`
+	queryUpdateUserCurrent := `UPDATE users SET current = current + ($1) WHERE user_id = ($2)`
 
 	for {
 		<-w.timer.C
 	taskloop:
 		for {
 			task := <-w.repo.taskCh
-			w.repo.mutex.Lock()
 			_, err := w.repo.db.Exec(queryUpdateOrderStatus, NEW, task.orderID)
-			w.repo.mutex.Unlock()
 			if err != nil {
 				log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
 			}
@@ -94,46 +90,35 @@ func (w *Worker) loop() {
 					w.repo.taskCh <- task
 
 				case PROCESSING:
-					w.repo.mutex.Lock()
 					_, err := w.repo.db.Exec(queryUpdateOrderStatus, PROCESSING, task.orderID)
-					w.repo.mutex.Unlock()
 					if err != nil {
 						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
 					w.repo.taskCh <- task
 
 				case INVALID:
-					w.repo.mutex.Lock()
 					_, err := w.repo.db.Exec(queryUpdateOrderStatus, INVALID, task.orderID)
-					w.repo.mutex.Unlock()
 					if err != nil {
 						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
 
 				case PROCESSED:
-					w.repo.mutex.Lock()
-					var current float64
-					err := w.repo.db.Get(&current, queryCheckUserCurrent, task.userID)
+					tx, err := w.repo.db.Begin()
 					if err != nil {
 						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
-					newCurrent := current + accrualResp.Accrual
-
-					tx, err := w.repo.db.Begin()
 					defer func(tx *sql.Tx) {
 						err := tx.Rollback()
 						if err != nil {
 							log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
 						}
 					}(tx)
-					if err != nil {
-						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
-					}
+
 					_, err = tx.Exec(queryUpdateOrderStatusAccrual, PROCESSED, accrualResp.Accrual, task.orderID)
 					if err != nil {
 						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
-					_, err = tx.Exec(queryUpdateUserCurrent, newCurrent, task.userID)
+					_, err = tx.Exec(queryUpdateUserCurrent, accrualResp.Accrual, task.userID)
 					if err != nil {
 						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
@@ -141,8 +126,6 @@ func (w *Worker) loop() {
 					if err != nil {
 						log.Printf("worker #%d task #%v error: %v\n", w.id, task, err)
 					}
-
-					w.repo.mutex.Unlock()
 				}
 			case 429:
 				w.timer.Reset(10 * time.Second)
@@ -155,7 +138,6 @@ func (w *Worker) loop() {
 }
 
 type RepoDB struct {
-	mutex  sync.RWMutex
 	db     *sqlx.DB
 	client *client.Client
 	taskCh chan *Task
@@ -188,9 +170,6 @@ func NewRepoDB(databaseURI string, client *client.Client) (*RepoDB, error) {
 }
 
 func (r *RepoDB) CreateUser(login string, passwordHash string) (string, error) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	var userID int64
 	querySaveUser := `INSERT INTO users (login, password_hash) VALUES ($1, $2) RETURNING user_id;`
 	err := r.db.Get(&userID, querySaveUser, login, passwordHash)
@@ -202,9 +181,6 @@ func (r *RepoDB) CreateUser(login string, passwordHash string) (string, error) {
 }
 
 func (r *RepoDB) AuthUser(login string, passwordHash string) (string, error) {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-
 	var userID int64
 	queryAuthUser := `SELECT user_id FROM users WHERE login = ($1) AND password_hash = ($2)`
 	err := r.db.Get(&userID, queryAuthUser, login, passwordHash)
@@ -218,9 +194,6 @@ func (r *RepoDB) AuthUser(login string, passwordHash string) (string, error) {
 func (r *RepoDB) LoadOrder(orderID string, userID string) error {
 	// 1. записывает в бд в таблицу order (order_id=orderID, user_id=userID, status=NEW, accrual=0, uploaded_at=time.Now())
 	// 2. добавляет новую задачу с {userID, orderID} в очередь на отправку в систему рассчёта
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	var userIDExisting int64
 	queryCheckIfOrderExists := `SELECT user_id FROM orders WHERE order_id = ($1)`
 	err := r.db.Get(&userIDExisting, queryCheckIfOrderExists, orderID)
@@ -251,9 +224,6 @@ func (r *RepoDB) LoadOrder(orderID string, userID string) error {
 }
 
 func (r *RepoDB) GetOrders(userID string) ([]Order, error) {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-
 	var orders []Order
 	queryGetOrders := "SELECT order_id, status, accrual, uploaded_at FROM orders WHERE user_id = ($1) ORDER BY uploaded_at ASC"
 	err := r.db.Select(&orders, queryGetOrders, userID)
@@ -265,9 +235,6 @@ func (r *RepoDB) GetOrders(userID string) ([]Order, error) {
 }
 
 func (r *RepoDB) GetBalance(userID string) (Balance, error) {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-
 	var balance Balance
 	queryGetBalance := `SELECT current, withdrawn FROM users WHERE user_id = ($1)`
 	err := r.db.Get(&balance, queryGetBalance, userID)
@@ -278,25 +245,13 @@ func (r *RepoDB) GetBalance(userID string) (Balance, error) {
 }
 
 func (r *RepoDB) Withdraw(orderID string, userID string, sum float64) error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	queryCheckUserBalance := `SELECT current, withdrawn FROM users WHERE user_id = ($1)`
+	queryUpdateUserBalance := `UPDATE users SET current = current - ($1), withdrawn = withdrawn + ($1) WHERE user_id = ($2) RETURNING current`
 	queryAddWithdraw := `INSERT INTO withdrawals (order_id, user_id, sum, processed_at) VALUES ($1, $2, $3, $4)`
-	queryUpdateUserBalance := `UPDATE users SET current = ($1), withdrawn = ($2) WHERE user_id = ($3)`
 
-	var balance Balance
-	err := r.db.Get(&balance, queryCheckUserBalance, userID)
+	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
-	if balance.Current < sum {
-		return fmt.Errorf("%w", ErrInsufficientFunds)
-	}
-
-	newBalance := Balance{balance.Current - sum, balance.Withdrawn + sum}
-
-	tx, err := r.db.Begin()
 	defer func(tx *sql.Tx) {
 		err := tx.Rollback()
 		if err != nil {
@@ -304,17 +259,20 @@ func (r *RepoDB) Withdraw(orderID string, userID string, sum float64) error {
 		}
 	}(tx)
 
+	var newBalance float64
+	err = tx.QueryRow(queryUpdateUserBalance, sum, userID).Scan(&newBalance)
 	if err != nil {
 		return err
 	}
+	if newBalance < 0 {
+		return ErrInsufficientFunds
+	}
+
 	_, err = tx.Exec(queryAddWithdraw, orderID, userID, sum, time.Now().Truncate(time.Second))
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(queryUpdateUserBalance, newBalance.Current, newBalance.Withdrawn, userID)
-	if err != nil {
-		return err
-	}
+
 	err = tx.Commit()
 	if err != nil {
 		return err
@@ -324,9 +282,6 @@ func (r *RepoDB) Withdraw(orderID string, userID string, sum float64) error {
 }
 
 func (r *RepoDB) GetWithdrawals(userID string) ([]Withdrawal, error) {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-
 	var withdrawals []Withdrawal
 	queryGetWithdrawals := "SELECT order_id, sum, processed_at FROM withdrawals WHERE user_id = ($1) ORDER BY processed_at ASC"
 
