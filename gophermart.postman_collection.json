@@ -1,0 +1,253 @@
+{
+	"info": {
+		"_postman_id": "be74508f-1a0d-46df-b61d-9de3bf42f94e",
+		"name": "gophermart",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Регистрация правила",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"match\": \"LG\",\n    \"reward\": 5,\n    \"reward_type\": \"%\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{accrual_url}}/api/goods",
+					"host": [
+						"{{accrual_url}}"
+					],
+					"path": [
+						"api",
+						"goods"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Добавление ордера",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"order\": \"24636128\",\n    \"goods\": [\n        {\n            \"description\": \"LG Monitor\",\n            \"price\": 50002.0\n        }\n    ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{accrual_url}}/api/orders",
+					"host": [
+						"{{accrual_url}}"
+					],
+					"path": [
+						"api",
+						"orders"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Рассчёт результата начисления",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{accrual_url}}/api/orders/24636128",
+					"host": [
+						"{{accrual_url}}"
+					],
+					"path": [
+						"api",
+						"orders",
+						"24636128"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Регистрация пользователя",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"login\": \"test\",\n    \"password\": \"test\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{server_url}}/api/user/register",
+					"host": [
+						"{{server_url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Аутентификация пользователя",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"login\": \"test\",\n    \"password\": \"test\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{server_url}}/api/user/login",
+					"host": [
+						"{{server_url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Выводы средств",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{server_url}}/api/user/balance/withdrawals",
+					"host": [
+						"{{server_url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"balance",
+						"withdrawals"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Загрузка номера заказа",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "24636128",
+					"options": {
+						"raw": {
+							"language": "text"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{server_url}}/api/user/orders",
+					"host": [
+						"{{server_url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"orders"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Заказы",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{server_url}}/api/user/orders",
+					"host": [
+						"{{server_url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"orders"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Баланс",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{server_url}}/api/user/balance",
+					"host": [
+						"{{server_url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"balance"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Списание",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"order\": \"123455\",\n    \"sum\": 499.5\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{server_url}}/api/user/balance/withdraw",
+					"host": [
+						"{{server_url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"balance",
+						"withdraw"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
